@@ -16,7 +16,8 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     - *AUC* calculated based on the U statistic
     - *p-value corrected* for FWER with Bonferroni-Holm procedure
     - *p-value corrected* for FDR with Benjamini-Hochberg procedure'''
-    
+
+    X = pd.DataFrame(X)
     df = pd.DataFrame()
     X_np = np.asarray(X)
     y_np = np.asarray(y)
