@@ -35,6 +35,7 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
         except ValueError:
             print('Skipping feature because all values are identical in both classes.')
             mw_ubig = np.nan
+            mw_p = np.nan
             auc = np.nan
         # add results to the data frame
         df.loc[X.columns[i], 'U'] = mw_ubig
