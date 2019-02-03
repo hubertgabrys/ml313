@@ -16,7 +16,8 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     - *AUC* calculated based on the U statistic
     - *p-value corrected* for FWER with Bonferroni-Holm procedure
     - *p-value corrected* for FDR with Benjamini-Hochberg procedure'''
-    
+
+    X = pd.DataFrame(X)
     df = pd.DataFrame()
     X_np = np.asarray(X)
     y_np = np.asarray(y)
@@ -34,6 +35,7 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
         except ValueError:
             print('Skipping feature because all values are identical in both classes.')
             mw_ubig = np.nan
+            mw_p = np.nan
             auc = np.nan
         # add results to the data frame
         df.loc[X.columns[i], 'U'] = mw_ubig
