@@ -24,8 +24,8 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     for i in range(X.shape[1]):
         pos = X_np[y_np, i]
         neg = X_np[~y_np, i]
-        pos = pos[~np.isnan(pos)]
-        neg = neg[~np.isnan(neg)]
+        pos = pos[~np.isnan(pos.astype(float))]
+        neg = neg[~np.isnan(neg.astype(float))]
         n_pos = len(pos)
         n_neg = len(neg)
         try:
