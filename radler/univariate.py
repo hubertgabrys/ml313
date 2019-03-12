@@ -1,3 +1,11 @@
+"""
+Univariate analysis
+"""
+
+
+# Author: Hubert Gabryś <hubert.gabrys@gmail.com>
+# License: MIT
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
