@@ -1,3 +1,11 @@
+"""
+Univariate analysis
+"""
+
+
+# Author: Hubert Gabryś <hubert.gabrys@gmail.com>
+# License: MIT
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -10,12 +18,34 @@ from statsmodels.stats.multitest import multipletests
 
 
 def mann_whitney_u(X, y, alpha=0.05, validate=False):
-    '''The function performs the test and returns:
+    """Computes the Mann-Whitney U test for all columns in X.
+
     - value of the *U* statistic
+    - number of observations in the negative group *n_neg*
+    - number of observations in the positive group *n_pos*
     - *p-value* of the test
     - *AUC* calculated based on the U statistic
     - *p-value corrected* for FWER with Bonferroni-Holm procedure
-    - *p-value corrected* for FDR with Benjamini-Hochberg procedure'''
+    - *p-value corrected* for FDR with Benjamini-Hochberg procedure
+
+    Parameters
+    ----------
+    X : Pandas DataFrame, shape (n_observations, n_features)
+        Input data.
+
+    y : Pandas Series, shape (n_observations, )
+        Array of labels.
+
+    alpha : float, optional
+        Significance level for multiple testing correction.
+
+    validate : bool, optional
+        Double check of AUC estimation with logistic regression.
+
+    Returns
+    -------
+    df : Pandas DataFrame, shape (n_features, 7)
+    """
 
     X = pd.DataFrame(X)
     df = pd.DataFrame()
@@ -39,6 +69,8 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
             auc = np.nan
         # add results to the data frame
         df.loc[X.columns[i], 'U'] = mw_ubig
+        df.loc[X.columns[i], 'n_neg'] = n_neg
+        df.loc[X.columns[i], 'n_pos'] = n_pos
         df.loc[X.columns[i], 'p-value'] = mw_p
         df.loc[X.columns[i], 'AUC'] = auc
         if validate:
@@ -53,8 +85,35 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     df['FWER'] = multipletests(df['p-value'], method='h', alpha=0.05)[0]
     # FDR with Benjamini-Hochberg procedure
     df['FDR'] = multipletests(df['p-value'], method='fdr_bh', alpha=0.05)[0]
+    # set correct dtypes
+    df['n_neg'] = df['n_neg'].astype(int)
+    df['n_pos'] = df['n_pos'].astype(int)
 
     return df
+
+
+def recursive_reduction(df_auc, df_corr, threshold, retain, verbose=False):
+    df_auc = df_auc.copy()
+    df_auc = df_auc.loc[df_auc['FWER']]
+    df_auc = df_auc.sort_values('AUC', ascending=False)
+    df_corr = df_corr.abs()
+    df_corr = df_corr.loc[df_auc.index, df_auc.index]
+    i = 1
+    feats = list()
+    while len(df_auc) > 0:
+        if verbose:
+            print('Run {}'.format(i))
+        if (i == 1) and (retain is not None):
+            feats.append(retain)
+        else:
+            feats.append(df_auc.index[0])
+        if verbose:
+            print('Best feature: {}'.format(feats[-1]))
+        mask = df_corr[feats[-1]] < threshold
+        df_auc = df_auc[mask]
+        df_corr = df_corr.loc[df_auc.index, df_auc.index]
+        i += 1
+    return feats
 
 
 def plot_roc_curve(df, column, y):
