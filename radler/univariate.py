@@ -10,12 +10,34 @@ from statsmodels.stats.multitest import multipletests
 
 
 def mann_whitney_u(X, y, alpha=0.05, validate=False):
-    '''The function performs the test and returns:
+    """Computes the Mann-Whitney U test for all columns in X.
+
     - value of the *U* statistic
+    - number of observations in the negative group *n_neg*
+    - number of observations in the positive group *n_pos*
     - *p-value* of the test
     - *AUC* calculated based on the U statistic
     - *p-value corrected* for FWER with Bonferroni-Holm procedure
-    - *p-value corrected* for FDR with Benjamini-Hochberg procedure'''
+    - *p-value corrected* for FDR with Benjamini-Hochberg procedure
+
+    Parameters
+    ----------
+    X : Pandas DataFrame, shape (n_observations, n_features)
+        Input data.
+
+    y : Pandas Series, shape (n_observations, )
+        Array of labels.
+
+    alpha : float, optional
+        Significance level for multiple testing correction.
+
+    validate : bool, optional
+        Double check of AUC estimation with logistic regression.
+
+    Returns
+    -------
+    df : Pandas DataFrame, shape (n_features, 7)
+    """
 
     X = pd.DataFrame(X)
     df = pd.DataFrame()
@@ -39,6 +61,8 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
             auc = np.nan
         # add results to the data frame
         df.loc[X.columns[i], 'U'] = mw_ubig
+        df.loc[X.columns[i], 'n_neg'] = n_neg
+        df.loc[X.columns[i], 'n_pos'] = n_pos
         df.loc[X.columns[i], 'p-value'] = mw_p
         df.loc[X.columns[i], 'AUC'] = auc
         if validate:
@@ -53,6 +77,9 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     df['FWER'] = multipletests(df['p-value'], method='h', alpha=0.05)[0]
     # FDR with Benjamini-Hochberg procedure
     df['FDR'] = multipletests(df['p-value'], method='fdr_bh', alpha=0.05)[0]
+    # set correct dtypes
+    df['n_neg'] = df['n_neg'].astype(int)
+    df['n_pos'] = df['n_pos'].astype(int)
 
     return df
 
