@@ -92,6 +92,30 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     return df
 
 
+def recursive_reduction(df_auc, df_corr, threshold, retain, verbose=False):
+    df_auc = df_auc.copy()
+    df_auc = df_auc.loc[df_auc['FWER']]
+    df_auc = df_auc.sort_values('AUC', ascending=False)
+    df_corr = df_corr.abs()
+    df_corr = df_corr.loc[df_auc.index, df_auc.index]
+    i = 1
+    feats = list()
+    while len(df_auc) > 0:
+        if verbose:
+            print('Run {}'.format(i))
+        if (i == 1) and (retain is not None):
+            feats.append(retain)
+        else:
+            feats.append(df_auc.index[0])
+        if verbose:
+            print('Best feature: {}'.format(feats[-1]))
+        mask = df_corr[feats[-1]] < threshold
+        df_auc = df_auc[mask]
+        df_corr = df_corr.loc[df_auc.index, df_auc.index]
+        i += 1
+    return feats
+
+
 def plot_roc_curve(df, column, y):
     pipe = Pipeline(steps=[('scaler', RobustScaler()), ('clf', LogisticRegression())])
     y_score = pipe.fit(df.loc[:, column].values.reshape(-1, 1), y).decision_function(df.loc[:, column].values.reshape(-1, 1))
