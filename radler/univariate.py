@@ -3,7 +3,7 @@ Univariate analysis
 """
 
 
-# Author: Hubert Gabryś <hubert.gabrys@gmail.com>
+# Author: Hubert Gabrys <hubert.gabrys@gmail.com>
 # License: MIT
 
 import matplotlib.pyplot as plt
@@ -13,8 +13,10 @@ from scipy.stats import mannwhitneyu
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score, roc_curve, auc
+# sfrom sklearn.metrics import roc_auc_score, roc_curve, auc
+from sklearn import metrics
 from statsmodels.stats.multitest import multipletests
+from scipy.stats import norm
 
 
 def mann_whitney_u(X, y, alpha=0.05, validate=False):
@@ -61,25 +63,43 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
         try:
             mw_u2, mw_p = mannwhitneyu(pos, neg, alternative='two-sided')
             mw_ubig = max(mw_u2, n_pos*n_neg-mw_u2)
-            auc = mw_ubig/(n_pos*n_neg)
+            auc = mw_u2/(n_pos*n_neg)
+            # calculate direction
+            if mw_u2 < mw_ubig:
+                direction = 'negative'
+            else:
+                direction = 'positive'
+            # calculate confidence intervals
+            auc_l, auc_h = bootstrap_bca(pos, neg)
+            if direction == 'negative':
+                auc = 1 - auc
+                auc_l_old = auc_l
+                auc_l = 1 - auc_h
+                auc_h = 1 - auc_l_old
         except ValueError:
             print('Skipping feature because all values are identical in both classes.')
             mw_ubig = np.nan
             mw_p = np.nan
             auc = np.nan
+            auc_l = np.nan
+            auc_h = np.nan
+            direction = np.nan
         # add results to the data frame
         df.loc[X.columns[i], 'U'] = mw_ubig
         df.loc[X.columns[i], 'n_neg'] = n_neg
         df.loc[X.columns[i], 'n_pos'] = n_pos
+        df.loc[X.columns[i], 'direction'] = direction
         df.loc[X.columns[i], 'p-value'] = mw_p
         df.loc[X.columns[i], 'AUC'] = auc
+        df.loc[X.columns[i], 'AUC_L'] = auc_l
+        df.loc[X.columns[i], 'AUC_H'] = auc_h
         if validate:
             # validate with logistic regression
             # Flips like AUC = 1-AUC_lr are due to outliers
             pipe = Pipeline([('scaler', RobustScaler()), ('clf', LogisticRegression())])
             pipe.fit(X_np[:, i].reshape(-1, 1), y_np)
             y_est = pipe.predict_proba(X_np[:, i].reshape(-1, 1))
-            auc_lr = roc_auc_score(y_np, y_est[:, 1])
+            auc_lr = metrics.roc_auc_score(y_np, y_est[:, 1])
             df.loc[X.columns[i], 'AUC_lr'] = auc_lr
     # FWER with Bonferroni-Holm procedure
     df['FWER'] = multipletests(df['p-value'], method='h', alpha=0.05)[0]
@@ -90,6 +110,42 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     df['n_pos'] = df['n_pos'].astype(int)
 
     return df
+
+
+def bootstrap_bca(pos, neg, alpha=0.05):
+    n_pos = len(pos)
+    n_neg = len(neg)
+    auc_b_list = list()
+    boot_iters = 1000
+    for _ in range(boot_iters):
+        this_pos = np.random.choice(pos, n_pos)
+        this_neg = np.random.choice(neg, n_neg)
+        mw_u2, mw_p = mannwhitneyu(this_pos, this_neg, alternative='two-sided')
+        auc_b = mw_u2/(n_pos*n_neg)
+        auc_b_list.append(auc_b)
+    auc_bs = np.array(auc_b_list)
+    # Initial computations
+    auc_bs.sort(axis=0)
+    mw_u2, mw_p = mannwhitneyu(pos, neg, alternative='two-sided')
+    auc_u = mw_u2/(n_pos*n_neg)
+    # The bias correction value.
+    z0 = norm.ppf(np.sum(auc_bs < auc_u)/boot_iters)    
+    # The acceleration value
+    jstat = np.zeros(boot_iters)
+    for i in range(boot_iters):
+        jstat[i] = np.mean(np.delete(auc_bs, i))
+    jmean = np.mean(jstat)
+    a = np.sum((jmean - jstat)**3) / (6.0 * np.sum((jmean - jstat)**2)**1.5)
+    if np.any(np.isnan(a)):
+        nanind = np.nonzero(np.isnan(a))
+        warnings.warn("BCa acceleration values for indexes {} were undefined. Statistic values were likely all equal. Affected CI will be inaccurate.".format(nanind), InstabilityWarning, stacklevel=2)
+    # Interval
+    alphas = np.array([alpha/2, 1-alpha/2])
+    z1 = norm.ppf(alpha/2)
+    z2 = norm.ppf(1-alpha/2)
+    alpha1 = norm.pdf(z0 + (z0 + z1)/(1-a*(z0+z1)))
+    alpha2 = 1 - norm.pdf(z0 + (z0 + z2)/(1-a*(z0+z2)))
+    return np.percentile(auc_bs, alpha1*100), np.percentile(auc_bs, alpha2*100)
 
 
 def recursive_reduction(df_auc, df_corr, threshold, retain, verbose=False):
@@ -119,8 +175,8 @@ def recursive_reduction(df_auc, df_corr, threshold, retain, verbose=False):
 def plot_roc_curve(df, column, y):
     pipe = Pipeline(steps=[('scaler', RobustScaler()), ('clf', LogisticRegression())])
     y_score = pipe.fit(df.loc[:, column].values.reshape(-1, 1), y).decision_function(df.loc[:, column].values.reshape(-1, 1))
-    fpr, tpr, _ = roc_curve(y, y_score)
-    roc_auc = auc(fpr, tpr)
+    fpr, tpr, _ = metrics.roc_curve(y, y_score)
+    roc_auc = metrics.auc(fpr, tpr)
     plt.figure()
     lw = 2
     plt.plot(fpr, tpr, color='darkorange', lw=lw, label='AUC(' + column + ') = %0.2f' % roc_auc)
@@ -132,6 +188,7 @@ def plot_roc_curve(df, column, y):
     plt.legend(loc="lower right")
     plt.tight_layout()
     plt.show()
+    return fpr, tpr, roc_auc
 
 
 def plot_auc_vs_wavelet(df_auc, feat2flip, rownames, colnames):
