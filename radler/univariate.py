@@ -13,7 +13,7 @@ from scipy.stats import mannwhitneyu
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
 from sklearn.linear_model import LogisticRegression
-# sfrom sklearn.metrics import roc_auc_score, roc_curve, auc
+# from sklearn.metrics import roc_auc_score, roc_curve, auc
 from sklearn import metrics
 from statsmodels.stats.multitest import multipletests
 from scipy.stats import norm
@@ -52,7 +52,7 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     X = pd.DataFrame(X)
     df = pd.DataFrame()
     X_np = np.asarray(X)
-    y_np = np.asarray(y)
+    y_np = np.asarray(y) != 0
     for i in range(X.shape[1]):
         pos = X_np[y_np, i]
         neg = X_np[~y_np, i]
