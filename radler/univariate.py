@@ -71,14 +71,14 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
             else:
                 direction = 'positive'
             # calculate confidence intervals
-            auc_l, auc_h = bootstrap_bca(pos, neg)
+            auc_l, auc_h = bootstrap_bca(pos, neg, alpha=boot_alpha, boot_iters=boot_iters)
             if direction == 'negative':
                 auc = 1 - auc
                 auc_l_old = auc_l
                 auc_l = 1 - auc_h
                 auc_h = 1 - auc_l_old
         except ValueError:
-            print('Skipping feature because all values are identical in both classes.')
+            # print('Skipping feature because all values are identical in both classes.')
             mw_ubig = np.nan
             mw_p = np.nan
             auc = np.nan
@@ -138,15 +138,15 @@ def bootstrap_bca(pos, neg, alpha=0.05):
     jmean = np.mean(jstat)
     a = np.sum((jmean - jstat)**3) / (6.0 * np.sum((jmean - jstat)**2)**1.5)
     if np.any(np.isnan(a)):
-        nanind = np.nonzero(np.isnan(a))
-        warnings.warn("BCa acceleration values for indexes {} were undefined. Statistic values were likely all equal. Affected CI will be inaccurate.".format(nanind), InstabilityWarning, stacklevel=2)
-    # Interval
-    alphas = np.array([alpha/2, 1-alpha/2])
-    z1 = norm.ppf(alpha/2)
-    z2 = norm.ppf(1-alpha/2)
-    alpha1 = norm.pdf(z0 + (z0 + z1)/(1-a*(z0+z1)))
-    alpha2 = 1 - norm.pdf(z0 + (z0 + z2)/(1-a*(z0+z2)))
-    return np.percentile(auc_bs, alpha1*100), np.percentile(auc_bs, alpha2*100)
+        return np.nan, np.nan
+    else:
+        # Interval
+        alphas = np.array([alpha/2, 1-alpha/2])
+        z1 = norm.ppf(alpha/2)
+        z2 = norm.ppf(1-alpha/2)
+        alpha1 = norm.pdf(z0 + (z0 + z1)/(1-a*(z0+z1)))
+        alpha2 = 1 - norm.pdf(z0 + (z0 + z2)/(1-a*(z0+z2)))
+        return np.percentile(auc_bs, alpha1*100), np.percentile(auc_bs, alpha2*100)
 
 
 def recursive_reduction(df_auc, df_corr, threshold, retain, verbose=False):
