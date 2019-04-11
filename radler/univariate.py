@@ -17,6 +17,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn import metrics
 from statsmodels.stats.multitest import multipletests
 from scipy.stats import norm
+from tqdm import tqdm
 
 
 def mann_whitney_u(X, y, alpha=0.05, validate=False):
@@ -53,7 +54,7 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     df = pd.DataFrame()
     X_np = np.asarray(X)
     y_np = np.asarray(y) != 0
-    for i in range(X.shape[1]):
+    for i in tqdm(range(X.shape[1])):
         pos = X_np[y_np, i]
         neg = X_np[~y_np, i]
         pos = pos[~np.isnan(pos.astype(float))]
