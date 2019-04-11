@@ -20,7 +20,7 @@ from scipy.stats import norm
 from tqdm import tqdm
 
 
-def mann_whitney_u(X, y, alpha=0.05, validate=False):
+def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, validate=False):
     """Computes the Mann-Whitney U test for all columns in X.
 
     - value of the *U* statistic
@@ -39,7 +39,7 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     y : Pandas Series, shape (n_observations, )
         Array of labels.
 
-    alpha : float, optional
+    mtc_alpha : float, optional
         Significance level for multiple testing correction.
 
     validate : bool, optional
@@ -62,6 +62,8 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
         n_pos = len(pos)
         n_neg = len(neg)
         try:
+            if (n_neg < 12) or (n_pos < 12):
+                raise ValueError('At least one of the samples is too small.')
             mw_u2, mw_p = mannwhitneyu(pos, neg, alternative='two-sided')
             mw_ubig = max(mw_u2, n_pos*n_neg-mw_u2)
             auc = mw_u2/(n_pos*n_neg)
@@ -103,9 +105,9 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
             auc_lr = metrics.roc_auc_score(y_np, y_est[:, 1])
             df.loc[X.columns[i], 'AUC_lr'] = auc_lr
     # FWER with Bonferroni-Holm procedure
-    df['FWER'] = multipletests(df['p-value'], method='h', alpha=0.05)[0]
+    df['FWER'] = multipletests(df['p-value'], method='h', alpha=mtc_alpha)[0]
     # FDR with Benjamini-Hochberg procedure
-    df['FDR'] = multipletests(df['p-value'], method='fdr_bh', alpha=0.05)[0]
+    df['FDR'] = multipletests(df['p-value'], method='fdr_bh', alpha=mtc_alpha)[0]
     # set correct dtypes
     df['n_neg'] = df['n_neg'].astype(int)
     df['n_pos'] = df['n_pos'].astype(int)
@@ -113,11 +115,10 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     return df
 
 
-def bootstrap_bca(pos, neg, alpha=0.05):
+def bootstrap_bca(pos, neg, alpha=0.05, boot_iters=2000):
     n_pos = len(pos)
     n_neg = len(neg)
     auc_b_list = list()
-    boot_iters = 1000
     for _ in range(boot_iters):
         this_pos = np.random.choice(pos, n_pos)
         this_neg = np.random.choice(neg, n_neg)
