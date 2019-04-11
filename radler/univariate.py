@@ -17,9 +17,10 @@ from sklearn.linear_model import LogisticRegression
 from sklearn import metrics
 from statsmodels.stats.multitest import multipletests
 from scipy.stats import norm
+from tqdm import tqdm
 
 
-def mann_whitney_u(X, y, alpha=0.05, validate=False):
+def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, validate=False):
     """Computes the Mann-Whitney U test for all columns in X.
 
     - value of the *U* statistic
@@ -38,7 +39,7 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     y : Pandas Series, shape (n_observations, )
         Array of labels.
 
-    alpha : float, optional
+    mtc_alpha : float, optional
         Significance level for multiple testing correction.
 
     validate : bool, optional
@@ -53,7 +54,7 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     df = pd.DataFrame()
     X_np = np.asarray(X)
     y_np = np.asarray(y) != 0
-    for i in range(X.shape[1]):
+    for i in tqdm(range(X.shape[1])):
         pos = X_np[y_np, i]
         neg = X_np[~y_np, i]
         pos = pos[~np.isnan(pos.astype(float))]
@@ -61,6 +62,8 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
         n_pos = len(pos)
         n_neg = len(neg)
         try:
+            if (n_neg < 12) or (n_pos < 12):
+                raise ValueError('At least one of the samples is too small.')
             mw_u2, mw_p = mannwhitneyu(pos, neg, alternative='two-sided')
             mw_ubig = max(mw_u2, n_pos*n_neg-mw_u2)
             auc = mw_u2/(n_pos*n_neg)
@@ -70,14 +73,14 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
             else:
                 direction = 'positive'
             # calculate confidence intervals
-            auc_l, auc_h = bootstrap_bca(pos, neg)
+            auc_l, auc_h = bootstrap_bca(pos, neg, alpha=boot_alpha, boot_iters=boot_iters)
             if direction == 'negative':
                 auc = 1 - auc
                 auc_l_old = auc_l
                 auc_l = 1 - auc_h
                 auc_h = 1 - auc_l_old
         except ValueError:
-            print('Skipping feature because all values are identical in both classes.')
+            # print('Skipping feature because all values are identical in both classes.')
             mw_ubig = np.nan
             mw_p = np.nan
             auc = np.nan
@@ -102,9 +105,9 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
             auc_lr = metrics.roc_auc_score(y_np, y_est[:, 1])
             df.loc[X.columns[i], 'AUC_lr'] = auc_lr
     # FWER with Bonferroni-Holm procedure
-    df['FWER'] = multipletests(df['p-value'], method='h', alpha=0.05)[0]
+    df['FWER'] = multipletests(df['p-value'], method='h', alpha=mtc_alpha)[0]
     # FDR with Benjamini-Hochberg procedure
-    df['FDR'] = multipletests(df['p-value'], method='fdr_bh', alpha=0.05)[0]
+    df['FDR'] = multipletests(df['p-value'], method='fdr_bh', alpha=mtc_alpha)[0]
     # set correct dtypes
     df['n_neg'] = df['n_neg'].astype(int)
     df['n_pos'] = df['n_pos'].astype(int)
@@ -112,11 +115,10 @@ def mann_whitney_u(X, y, alpha=0.05, validate=False):
     return df
 
 
-def bootstrap_bca(pos, neg, alpha=0.05):
+def bootstrap_bca(pos, neg, alpha=0.05, boot_iters=2000):
     n_pos = len(pos)
     n_neg = len(neg)
     auc_b_list = list()
-    boot_iters = 1000
     for _ in range(boot_iters):
         this_pos = np.random.choice(pos, n_pos)
         this_neg = np.random.choice(neg, n_neg)
@@ -137,15 +139,15 @@ def bootstrap_bca(pos, neg, alpha=0.05):
     jmean = np.mean(jstat)
     a = np.sum((jmean - jstat)**3) / (6.0 * np.sum((jmean - jstat)**2)**1.5)
     if np.any(np.isnan(a)):
-        nanind = np.nonzero(np.isnan(a))
-        warnings.warn("BCa acceleration values for indexes {} were undefined. Statistic values were likely all equal. Affected CI will be inaccurate.".format(nanind), InstabilityWarning, stacklevel=2)
-    # Interval
-    alphas = np.array([alpha/2, 1-alpha/2])
-    z1 = norm.ppf(alpha/2)
-    z2 = norm.ppf(1-alpha/2)
-    alpha1 = norm.pdf(z0 + (z0 + z1)/(1-a*(z0+z1)))
-    alpha2 = 1 - norm.pdf(z0 + (z0 + z2)/(1-a*(z0+z2)))
-    return np.percentile(auc_bs, alpha1*100), np.percentile(auc_bs, alpha2*100)
+        return np.nan, np.nan
+    else:
+        # Interval
+        alphas = np.array([alpha/2, 1-alpha/2])
+        z1 = norm.ppf(alpha/2)
+        z2 = norm.ppf(1-alpha/2)
+        alpha1 = norm.pdf(z0 + (z0 + z1)/(1-a*(z0+z1)))
+        alpha2 = 1 - norm.pdf(z0 + (z0 + z2)/(1-a*(z0+z2)))
+        return np.percentile(auc_bs, alpha1*100), np.percentile(auc_bs, alpha2*100)
 
 
 def recursive_reduction(df_auc, df_corr, threshold, retain, verbose=False):
