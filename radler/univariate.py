@@ -152,7 +152,7 @@ def bootstrap_bca(pos, neg, alpha=0.05, boot_iters=2000):
 
 def recursive_reduction(df_auc, df_corr, threshold, retain, verbose=False):
     df_auc = df_auc.copy()
-    df_auc = df_auc.loc[df_auc['FWER']]
+    # df_auc = df_auc.loc[df_auc['FWER']]
     df_auc = df_auc.sort_values('AUC', ascending=False)
     df_corr = df_corr.abs()
     df_corr = df_corr.loc[df_auc.index, df_auc.index]
