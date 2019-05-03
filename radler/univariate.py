@@ -13,7 +13,6 @@ from scipy.stats import mannwhitneyu
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
 from sklearn.linear_model import LogisticRegression
-# from sklearn.metrics import roc_auc_score, roc_curve, auc
 from sklearn import metrics
 from statsmodels.stats.multitest import multipletests
 from scipy.stats import norm
