@@ -53,6 +53,7 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, valid
     df = pd.DataFrame()
     X_np = np.asarray(X)
     y_np = np.asarray(y) != 0
+    y_np = y_np.flatten()
     for i in tqdm(range(X.shape[1])):
         pos = X_np[y_np, i]
         neg = X_np[~y_np, i]
