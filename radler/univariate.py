@@ -52,13 +52,11 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, valid
     X = pd.DataFrame(X)
     df = pd.DataFrame()
     X_np = np.asarray(X)
-    y_np = np.asarray(y) != 0
+    y_np = np.asarray(y)
     y_np = y_np.flatten()
     for i in tqdm(range(X.shape[1])):
-        pos = X_np[y_np, i]
-        neg = X_np[~y_np, i]
-        pos = pos[~np.isnan(pos.astype(float))]
-        neg = neg[~np.isnan(neg.astype(float))]
+        pos = X_np[y_np == 1, i]
+        neg = X_np[y_np == 0, i]
         n_pos = len(pos)
         n_neg = len(neg)
         try:
@@ -131,7 +129,7 @@ def bootstrap_bca(pos, neg, alpha=0.05, boot_iters=2000):
     mw_u2, mw_p = mannwhitneyu(pos, neg, alternative='two-sided')
     auc_u = mw_u2/(n_pos*n_neg)
     # The bias correction value.
-    z0 = norm.ppf(np.sum(auc_bs < auc_u)/boot_iters)    
+    z0 = norm.ppf(np.sum(auc_bs < auc_u)/boot_iters)
     # The acceleration value
     jstat = np.zeros(boot_iters)
     for i in range(boot_iters):
