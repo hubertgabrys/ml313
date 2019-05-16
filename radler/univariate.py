@@ -6,6 +6,7 @@ Univariate analysis
 # Author: Hubert Gabrys <hubert.gabrys@gmail.com>
 # License: MIT
 
+from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -19,7 +20,7 @@ from scipy.stats import norm
 from tqdm import tqdm
 
 
-def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, validate=False):
+def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_jobs=1, verbose=0):
     """Computes the Mann-Whitney U test for all columns in X.
 
     - value of the *U* statistic
@@ -49,18 +50,18 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, valid
     df : Pandas DataFrame, shape (n_features, 7)
     """
 
-    X = pd.DataFrame(X)
-    df = pd.DataFrame()
-    X_np = np.asarray(X)
-    y_np = np.asarray(y)
-    y_np = y_np.flatten()
-    for i in tqdm(range(X.shape[1])):
+    def parfor(X_np, y_np, i):
+        df_this = pd.DataFrame()
         pos = X_np[y_np == 1, i]
         neg = X_np[y_np == 0, i]
+        pos = pos[np.isfinite(pos)]
+        neg = neg[np.isfinite(neg)]
+        # if any(np.isnan(pos)) or any(np.isnan(neg)):
+        #     import pdb; pdb.set_trace()
         n_pos = len(pos)
         n_neg = len(neg)
         try:
-            if (n_neg < 12) or (n_pos < 12):
+            if (n_neg < 5) or (n_pos < 5):
                 raise ValueError('At least one of the samples is too small.')
             mw_u2, mw_p = mannwhitneyu(pos, neg, alternative='two-sided')
             mw_ubig = max(mw_u2, n_pos*n_neg-mw_u2)
@@ -86,22 +87,24 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, valid
             auc_h = np.nan
             direction = np.nan
         # add results to the data frame
-        df.loc[X.columns[i], 'U'] = mw_ubig
-        df.loc[X.columns[i], 'n_neg'] = n_neg
-        df.loc[X.columns[i], 'n_pos'] = n_pos
-        df.loc[X.columns[i], 'direction'] = direction
-        df.loc[X.columns[i], 'p-value'] = mw_p
-        df.loc[X.columns[i], 'AUC'] = auc
-        df.loc[X.columns[i], 'AUC_L'] = auc_l
-        df.loc[X.columns[i], 'AUC_H'] = auc_h
-        if validate:
-            # validate with logistic regression
-            # Flips like AUC = 1-AUC_lr are due to outliers
-            pipe = Pipeline([('scaler', RobustScaler()), ('clf', LogisticRegression())])
-            pipe.fit(X_np[:, i].reshape(-1, 1), y_np)
-            y_est = pipe.predict_proba(X_np[:, i].reshape(-1, 1))
-            auc_lr = metrics.roc_auc_score(y_np, y_est[:, 1])
-            df.loc[X.columns[i], 'AUC_lr'] = auc_lr
+        df_this.loc[X.columns[i], 'U'] = mw_ubig
+        df_this.loc[X.columns[i], 'n_neg'] = n_neg
+        df_this.loc[X.columns[i], 'n_pos'] = n_pos
+        df_this.loc[X.columns[i], 'direction'] = direction
+        df_this.loc[X.columns[i], 'p-value'] = mw_p
+        df_this.loc[X.columns[i], 'AUC'] = auc
+        df_this.loc[X.columns[i], 'AUC_L'] = auc_l
+        df_this.loc[X.columns[i], 'AUC_H'] = auc_h
+
+        return df_this
+
+    # for i in tqdm(range(X.shape[1])):
+    X = pd.DataFrame(X)
+    X_np = np.asarray(X)
+    y_np = np.asarray(y)
+    y_np = y_np.flatten()
+    out = Parallel(n_jobs=n_jobs, verbose=verbose)(delayed(parfor)(X_np, y_np, i) for i in range(X.shape[1]))
+    df = pd.concat(out)
     # FWER with Bonferroni-Holm procedure
     df['FWER'] = multipletests(df['p-value'], method='h', alpha=mtc_alpha)[0]
     # FDR with Benjamini-Hochberg procedure
