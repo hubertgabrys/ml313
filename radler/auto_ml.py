@@ -9,6 +9,7 @@ import time
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
+
 import numpy as np
 import pandas as pd
 import scikits.bootstrap as bootstrap
@@ -42,6 +43,8 @@ from sklearn.svm import SVC
 from skrebate import SURF, MultiSURF, MultiSURFstar, ReliefF, SURFstar
 from xgboost import XGBClassifier
 from xgboost.core import XGBoostError
+
+from .univariate import mann_whitney_u, recursive_reduction
 
 
 
@@ -128,6 +131,53 @@ class CorrelationThreshold(BaseEstimator, SelectorMixin):
         big_mask = np.array([e in corrmat.index for e in corrmat.columns])
 
         return big_mask
+
+
+class MWWFeatureSelection(BaseEstimator, SelectorMixin):
+    """Description.
+    Parameters
+    ----------
+    corr_threshold : float, optional
+        Features correlated higher than this threshold will be removed.
+        The default threshold is 0.90.
+    Attributes
+    ----------
+    correlation_matrix_ : array, shape (n_features,n_features)
+        Correlation matrix.
+    """
+
+    def __init__(self, corr_method='pearson', corr_threshold=0.9, n_feats=-1, n_jobs=1):
+        self.corr_method = corr_method
+        self.corr_threshold = corr_threshold
+        self.n_feats = n_feats
+        self.n_jobs = n_jobs
+
+    def fit(self, X, y=None):
+        """Learn empirical variances from X.
+        Parameters
+        ----------
+        X : {array-like, sparse matrix}, shape (n_samples, n_features)
+            Sample vectors from which to compute variances.
+        y : any
+            Ignored. This parameter exists only for compatibility with
+            sklearn.pipeline.Pipeline.
+        Returns
+        -------
+        self
+        """
+        self.df_auc_ = mann_whitney_u(X, y, boot_iters=1000, n_jobs=self.n_jobs, verbose=0)
+        self.df_corr_ = X.corr(self.corr_method)
+        self.reduced_feats_ = recursive_reduction(self.df_auc_, self.df_corr_, threshold=self.corr_threshold, retain=None)
+
+        return self
+
+    def _get_support_mask(self):
+        n_feats = int(np.round(len(self.reduced_feats_) * self.n_feats))
+        if n_feats < 2:
+            n_feats = 2
+        sel_feats = self.reduced_feats_[:n_feats]
+        mask = np.array([e in sel_feats for e in self.df_auc_.index])
+        return mask
 
 
 class Sampling(BaseEstimator):
@@ -622,8 +672,8 @@ def get_pipeline():
     """
     pipe = Pipeline([
         ('inlier_detection', InlierDetection()),
-        ('correlation_th', CorrelationThreshold()), #  remove correlated features
-        ('variance_th', VarianceThreshold()), # remove features with zero-variance
+        ('mww_fs', MWWFeatureSelection()), #  remove correlated features
+        # ('variance_th', VarianceThreshold()), # remove features with zero-variance
         ('scaler', StandardScaler()), # scale the features
         ('sampling', Sampling(
             kind='none',
@@ -684,23 +734,27 @@ def get_param_dist():
         # Inlier detection
         'inlier_detection__method': ['none', 'isolation_forest'],
         # Correlation
-        'correlation_th__threshold': np.arange(0.5, 1.01, 0.05),
+        # 'correlation_th__threshold': np.arange(0.5, 1.01, 0.05),
+        # MWW feature selection
+        'mww_fs__corr_method': ['pearson', 'spearman'],
+        'mww_fs__corr_threshold': sp_uniform(),
+        'mww_fs__n_feats': sp_uniform(),
         # Sampling
-        'sampling__kind': ('none', 'cc', 'cnn', 'enn', 'renn', 'aknn',
+        'sampling__kind': ['none', 'cc', 'cnn', 'enn', 'renn', 'aknn',
                            'iht', 'nm', 'ncr', 'oss', 'rus', 'tl', 'adasyn',
-                           'ros', 'smote', 'smoteenn', 'smotetomek'),
+                           'ros', 'smote', 'smoteenn', 'smotetomek'],
         'sampling__enn__n_neighbors': sp_randint(2, 3, 5),
         'sampling__enn__kind_sel': ('all', 'mode'),
-        'sampling__renn__n_neighbors': (2, 3, 5),
-        'sampling__aknn__n_neighbors': (2, 3, 5),
+        'sampling__renn__n_neighbors': [2, 3, 5],
+        'sampling__aknn__n_neighbors': [2, 3, 5],
         'sampling__aknn__kind_sel': ('all', 'mode'),
-        'sampling__iht__cv': (5, 10),
-        'sampling__nm__n_neighbors': (2, 3, 5),
-        'sampling__nm__n_neighbors_ver3': (2, 3, 5),
-        'sampling__ncr__n_neighbors': (2, 3, 5),
-        'sampling__adasyn__n_neighbors': (3, 5, 8),
-        'sampling__smote__k_neighbors': (3, 4, 5),
-        'sampling__smote__m_neighbors': (7, 8, 9),
+        'sampling__iht__cv': [5, 10],
+        'sampling__nm__n_neighbors': [2, 3, 5],
+        'sampling__nm__n_neighbors_ver3': [2, 3, 5],
+        'sampling__ncr__n_neighbors': [2, 3, 5],
+        'sampling__adasyn__n_neighbors': [3, 5, 8],
+        'sampling__smote__k_neighbors': [3, 4, 5],
+        'sampling__smote__m_neighbors': [7, 8, 9],
         'sampling__smote__kind': ('regular', 'borderline1', 'borderline2'),
         # Scaler
         'scaler': (StandardScaler(), RobustScaler()),
@@ -940,6 +994,7 @@ def tune_model(x_this, y_this, params):
     while (len(params['clf_kinds'])
            * len(params['fs_kinds'])
            * len(params['sampling_kinds']) > 1):
+        print('Random search interations: {}'.format(params['rs_iters']))
         for clf in params['clf_kinds']:
             for fs in params['fs_kinds']:
                 for sampling in params['sampling_kinds']:
@@ -948,7 +1003,7 @@ def tune_model(x_this, y_this, params):
                     if i not in df.index:
                         evaluate_model_candidate(clf, fs, sampling)
                     i += 1
-        print('#############')
+        print(30*'#')
         print('Purge {}'.format(purge_no))
         for algorithm in ['clf', 'fs', 'sampling']:
             if len(params[algorithm + '_kinds']) > 1:
@@ -966,6 +1021,7 @@ def tune_model(x_this, y_this, params):
                 params['rs_iters'] = int(params['rs_iters'])
         purge_no += 1
         last_purge = i
+    print('Random search interations: {}'.format(params['rs_iters']))
     print('{}: {} - {} - {}'.format(time.asctime(), params['clf_kinds'],
                                     params['fs_kinds'],
                                     params['sampling_kinds']))
