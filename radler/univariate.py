@@ -60,6 +60,8 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_job
         #     import pdb; pdb.set_trace()
         n_pos = len(pos)
         n_neg = len(neg)
+        median_pos = np.median(pos)
+        median_neg = np.median(neg)
         try:
             if (n_neg < 5) or (n_pos < 5):
                 raise ValueError('At least one of the samples is too small.')
@@ -90,6 +92,8 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_job
         df_this.loc[X.columns[i], 'U'] = mw_ubig
         df_this.loc[X.columns[i], 'n_neg'] = n_neg
         df_this.loc[X.columns[i], 'n_pos'] = n_pos
+        df_this.loc[X.columns[i], 'median_neg'] = median_neg
+        df_this.loc[X.columns[i], 'median_pos'] = median_pos
         df_this.loc[X.columns[i], 'direction'] = direction
         df_this.loc[X.columns[i], 'p-value'] = mw_p
         df_this.loc[X.columns[i], 'AUC'] = auc
