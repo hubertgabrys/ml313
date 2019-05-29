@@ -32,7 +32,7 @@ from sklearn.feature_selection.base import SelectorMixin
 from sklearn.feature_selection import (RFE, SelectKBest, f_classif,
                                        mutual_info_classif, VarianceThreshold)
 from sklearn.linear_model import LogisticRegression, SGDClassifier
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, roc_curve
 from sklearn.model_selection import (BaseCrossValidator, RandomizedSearchCV,
                                      StratifiedShuffleSplit, cross_val_score)
 from sklearn.model_selection import RepeatedStratifiedKFold
@@ -1035,6 +1035,8 @@ def tune_model(x_this, y_this, params):
 def test_model(X, y, params, n_splits=5):
     skf = StratifiedKFold(n_splits=n_splits)
     auc_scores = list()
+    fprs = list()
+    tprs = list()
     i = 1
     params = copy.deepcopy(params)
     params['df_pickle_name'] = params['df_pickle_name'][:-2] + '_split_0.p'
@@ -1052,5 +1054,10 @@ def test_model(X, y, params, n_splits=5):
         auc = roc_auc_score(y_test, y_pred[:, 1])
         print('Test AUC: {}'.format(auc))
         auc_scores.append(auc)
+        #  calculate ROC curve
+        fpr, tpr, _ = roc_curve(y_test, y_pred[:, 1])
+        fprs.append(fpr)
+        tprs.append(tpr)
+
         i += 1
-    return auc_scores
+    return auc_scores, fprs, tprs
