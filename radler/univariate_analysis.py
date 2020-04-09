@@ -1,28 +1,15 @@
-"""
-Univariate analysis
-"""
-
-
-# Author: Hubert Gabrys <hubert.gabrys@gmail.com>
-# License: MIT
-
 from joblib import Parallel, delayed
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.stats import mannwhitneyu
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import RobustScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn import metrics
 from statsmodels.stats.multitest import multipletests
 from scipy.stats import norm
-from tqdm import tqdm
+from scipy.stats import kruskal
+from scipy.stats import f_oneway
 
 
-def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_jobs=1, verbose=0):
+def univariate_analysis(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_jobs=1, verbose=0):
     """Computes the Mann-Whitney U test for all columns in X.
-
     - value of the *U* statistic
     - number of observations in the negative group *n_neg*
     - number of observations in the positive group *n_pos*
@@ -33,22 +20,27 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_job
 
     Parameters
     ----------
-    X : Pandas DataFrame, shape (n_observations, n_features)
-        Input data.
-
-    y : Pandas Series, shape (n_observations, )
+    :param y: Pandas Series, shape (n_observations, )
         Array of labels.
-
-    mtc_alpha : float, optional
+    :param X: Pandas DataFrame, shape (n_observations, n_features)
+        Input data.
+    :param mtc_alpha: float, optional
         Significance level for multiple testing correction.
-
-    validate : bool, optional
-        Double check of AUC estimation with logistic regression.
+    :param verbose: todo
+    :param n_jobs: todo
+    :param boot_iters: todo
+    :param boot_alpha: todo
 
     Returns
     -------
     df : Pandas DataFrame, shape (n_features, 7)
     """
+
+    def cohen_d(x, y):
+        nx = len(x)
+        ny = len(y)
+        dof = nx + ny - 2
+        return (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof=1) ** 2 + (ny-1)*np.std(y, ddof=1) ** 2) / dof)
 
     def parfor(X_np, y_np, i):
         df_this = pd.DataFrame()
@@ -56,8 +48,6 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_job
         neg = X_np[y_np == 0, i]
         pos = pos[np.isfinite(pos)]
         neg = neg[np.isfinite(neg)]
-        # if any(np.isnan(pos)) or any(np.isnan(neg)):
-        #     import pdb; pdb.set_trace()
         n_pos = len(pos)
         n_neg = len(neg)
         median_pos = np.median(pos)
@@ -65,10 +55,13 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_job
         try:
             if (n_neg < 5) or (n_pos < 5):
                 raise ValueError('At least one of the samples is too small.')
+            cohen_d_value = cohen_d(pos, neg)
+            f_stat, f_pval = f_oneway(pos, neg)
+            h_stat, h_pval = kruskal(pos, neg)
             mw_u2, mw_p = mannwhitneyu(pos, neg, alternative='two-sided')
             mw_ubig = max(mw_u2, n_pos*n_neg-mw_u2)
             auc = mw_u2/(n_pos*n_neg)
-            # calculate direction
+            # calculate the direction
             if mw_u2 < mw_ubig:
                 direction = 'negative'
             else:
@@ -82,6 +75,11 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_job
                 auc_h = 1 - auc_l_old
         except ValueError:
             # print('Skipping feature because all values are identical in both classes.')
+            cohen_d_value = np.nan
+            f_stat = np.nan
+            f_pval = np.nan
+            h_stat = np.nan
+            h_pval = np.nan
             mw_ubig = np.nan
             mw_p = np.nan
             auc = np.nan
@@ -89,20 +87,23 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_job
             auc_h = np.nan
             direction = np.nan
         # add results to the data frame
-        df_this.loc[X.columns[i], 'U'] = mw_ubig
         df_this.loc[X.columns[i], 'n_neg'] = n_neg
         df_this.loc[X.columns[i], 'n_pos'] = n_pos
         df_this.loc[X.columns[i], 'median_neg'] = median_neg
         df_this.loc[X.columns[i], 'median_pos'] = median_pos
         df_this.loc[X.columns[i], 'direction'] = direction
-        df_this.loc[X.columns[i], 'p-value'] = mw_p
-        df_this.loc[X.columns[i], 'AUC'] = auc
-        df_this.loc[X.columns[i], 'AUC_L'] = auc_l
-        df_this.loc[X.columns[i], 'AUC_H'] = auc_h
-
+        df_this.loc[X.columns[i], 'cohen_d'] = cohen_d_value
+        df_this.loc[X.columns[i], 'auc'] = auc
+        df_this.loc[X.columns[i], 'auc_cil'] = auc_l
+        df_this.loc[X.columns[i], 'auc_cih'] = auc_h
+        df_this.loc[X.columns[i], 'u_stat'] = mw_ubig
+        df_this.loc[X.columns[i], 'u_pval'] = mw_p
+        df_this.loc[X.columns[i], 'f_stat'] = f_stat
+        df_this.loc[X.columns[i], 'f_pval'] = f_pval
+        df_this.loc[X.columns[i], 'h_stat'] = h_stat
+        df_this.loc[X.columns[i], 'h_pval'] = h_pval
         return df_this
 
-    # for i in tqdm(range(X.shape[1])):
     X = pd.DataFrame(X)
     X_np = np.asarray(X)
     y_np = np.asarray(y)
@@ -110,13 +111,12 @@ def mann_whitney_u(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_job
     out = Parallel(n_jobs=n_jobs, verbose=verbose)(delayed(parfor)(X_np, y_np, i) for i in range(X.shape[1]))
     df = pd.concat(out)
     # FWER with Bonferroni-Holm procedure
-    df['FWER'] = multipletests(df['p-value'], method='h', alpha=mtc_alpha)[0]
+    df['FWER'] = multipletests(df['U_pval'], method='h', alpha=mtc_alpha)[0]
     # FDR with Benjamini-Hochberg procedure
-    df['FDR'] = multipletests(df['p-value'], method='fdr_bh', alpha=mtc_alpha)[0]
+    df['FDR'] = multipletests(df['U_pval'], method='fdr_bh', alpha=mtc_alpha)[0]
     # set correct dtypes
     df['n_neg'] = df['n_neg'].astype(int)
     df['n_pos'] = df['n_pos'].astype(int)
-
     return df
 
 
@@ -153,59 +153,3 @@ def bootstrap_bca(pos, neg, alpha=0.05, boot_iters=2000):
         alpha1 = norm.pdf(z0 + (z0 + z1)/(1-a*(z0+z1)))
         alpha2 = 1 - norm.pdf(z0 + (z0 + z2)/(1-a*(z0+z2)))
         return np.percentile(auc_bs, alpha1*100), np.percentile(auc_bs, alpha2*100)
-
-
-def recursive_reduction(df_auc, df_corr, threshold, retain, verbose=False):
-    df_auc = df_auc.copy()
-    # df_auc = df_auc.loc[df_auc['FWER']]
-    df_auc = df_auc.sort_values('AUC', ascending=False)
-    df_corr = df_corr.abs()
-    df_corr = df_corr.loc[df_auc.index, df_auc.index]
-    i = 1
-    feats = list()
-    while len(df_auc) > 0:
-        if verbose:
-            print('Run {}'.format(i))
-        if (i == 1) and (retain is not None):
-            feats.append(retain)
-        else:
-            feats.append(df_auc.index[0])
-        if verbose:
-            print('Best feature: {}'.format(feats[-1]))
-        mask = df_corr[feats[-1]] < threshold
-        df_auc = df_auc[mask]
-        df_corr = df_corr.loc[df_auc.index, df_auc.index]
-        i += 1
-    return feats
-
-
-def plot_roc_curve(df, column, y):
-    pipe = Pipeline(steps=[('scaler', RobustScaler()), ('clf', LogisticRegression())])
-    y_score = pipe.fit(df.loc[:, column].values.reshape(-1, 1), y).decision_function(df.loc[:, column].values.reshape(-1, 1))
-    fpr, tpr, _ = metrics.roc_curve(y, y_score)
-    roc_auc = metrics.auc(fpr, tpr)
-    plt.figure()
-    lw = 2
-    plt.plot(fpr, tpr, color='darkorange', lw=lw, label='AUC({}) = {:.2f}'.format(column, roc_auc))
-    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
-    plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.legend(loc="lower right")
-    plt.tight_layout()
-    plt.show()
-    return fpr, tpr, roc_auc
-
-
-def plot_auc_vs_wavelet(df_auc, feat2flip, rownames, colnames):
-    arr_foo = df_auc.loc[feat2flip, 'AUC'].values.reshape(9, 154).T
-    fig, ax = plt.subplots(figsize=(30,30))
-    plt.imshow(arr_foo)
-    plt.yticks(range(154), rownames)
-    plt.xticks(range(9), colnames, rotation='vertical')
-    ax.xaxis.tick_top()
-    ax.set_xlabel('Wavelet transformation')
-    ax.set_ylabel('Feature')
-    plt.colorbar()
-    plt.show()
