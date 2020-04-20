@@ -111,9 +111,9 @@ def univariate_analysis(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, 
     out = Parallel(n_jobs=n_jobs, verbose=verbose)(delayed(parfor)(X_np, y_np, i) for i in range(X.shape[1]))
     df = pd.concat(out)
     # FWER with Bonferroni-Holm procedure
-    df['FWER'] = multipletests(df['U_pval'], method='h', alpha=mtc_alpha)[0]
+    df['FWER'] = multipletests(df['u_pval'], method='h', alpha=mtc_alpha)[0]
     # FDR with Benjamini-Hochberg procedure
-    df['FDR'] = multipletests(df['U_pval'], method='fdr_bh', alpha=mtc_alpha)[0]
+    df['FDR'] = multipletests(df['u_pval'], method='fdr_bh', alpha=mtc_alpha)[0]
     # set correct dtypes
     df['n_neg'] = df['n_neg'].astype(int)
     df['n_pos'] = df['n_pos'].astype(int)
