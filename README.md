@@ -1,4 +1,4 @@
-# radioman-little-helper (RADLER)
+# ml313
 
 Python toolbox for statistical analysis and automated machine learning
 (AutoML). The toolbox is built to facilitate radiomics
@@ -11,7 +11,7 @@ Installation
 Dependencies
 ~~~~~~~~~~~~
 
-radioman-little-helper:
+ml313:
 
 - Python (>= 3.5)
 - NumPy (>= 1.11.0)
@@ -23,5 +23,4 @@ radioman-little-helper:
 - Joblib (0.13.2)
 - scikits.bootstrap (0.4.3)
 - imbalanced-learn (0.4.3)
-- scikit-rebate (0.6)
 - XGBoost (0.82)
