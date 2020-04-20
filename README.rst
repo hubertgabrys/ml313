@@ -1,4 +1,5 @@
-# ml313
+ml313
+=====
 
 Python toolbox for statistical analysis and machine learning.
 
@@ -21,3 +22,13 @@ ml313:
 - scikits.bootstrap
 - imbalanced-learn
 - XGBoost
+
+Installation from sources
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Clone the repository and install it with ``pip``::
+
+    git clone https://github.com/hubertgabrys/ml313.git
+    cd ml313
+    pip install .
+
