@@ -7,7 +7,7 @@ from imblearn.over_sampling import SMOTE
 from sklearn.pipeline import Pipeline
 from imblearn.pipeline import Pipeline as imbPipeline
 from sklearn.feature_selection._base import SelectorMixin
-from sklearn.base import BaseEstimator
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_selection import f_classif
 from sklearn.feature_selection import SelectFromModel
@@ -16,6 +16,8 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.ensemble import GradientBoostingClassifier
 from xgboost import XGBClassifier
+from catboost import CatBoostClassifier
+
 
 hyperparameter_space = {
     'sfpk': {},
@@ -36,7 +38,7 @@ hyperparameter_space = {
         },
     'decorr': {
         'threshold': uniform(),
-        'order': ['natural', 'f-score', 'h-score'],
+        'order': ['f-score', 'h-score'],
         },
     'sfm_lr': {
         'estimator__penalty': ['l1', 'l2', 'elasticnet'],
@@ -68,8 +70,18 @@ hyperparameter_space = {
         'estimator__learning_rate': [1e-3, 1e-2, 1e-1, 0.5, 1.],
         'estimator__subsample': np.arange(0.05, 1.01, 0.05),
         'estimator__min_child_weight': range(1, 21),
-        'estimator__nthread': [1]
-        }, 
+        'estimator__n_jobs': [1]
+        },
+    'sfm_cgb': {
+        'estimator__iterations': range(300, 3000),
+        'estimator__depth': range(4, 12),
+        'estimator__learning_rate': np.logspace(-2, -1, 1000, base=10),
+        'estimator__random_strength': np.logspace(-9, 0, 1000, base=10),
+        'estimator__bagging_temperature': uniform(),
+        'estimator__border_count': range(1, 255),
+        'estimator__l2_leaf_reg': range(2, 30),
+        'estimator__scale_pos_weight': np.linspace(0.01, 1, 1000)
+        },
     'clf_lr': {
         'C': np.logspace(-5, 10, 1000, base=2),
         'penalty': ['l1', 'l2', 'elasticnet'],
@@ -106,8 +118,18 @@ hyperparameter_space = {
         'learning_rate': [1e-3, 1e-2, 1e-1, 0.5, 1.],
         'subsample': np.arange(0.05, 1.01, 0.05),
         'min_child_weight': range(1, 21),
-        'nthread': [1]
-        }, 
+        'n_jobs': [1]
+        },
+    'clf_cgb': {
+        'iterations': range(500, 2000),
+        'depth': range(4, 12),
+        'learning_rate': np.logspace(-2, -1, 1000, base=10),
+        'random_strength': np.logspace(-9, 0, 1000, base=10),
+        'bagging_temperature': uniform(),
+        'border_count': range(1, 255),
+        'l2_leaf_reg': range(2, 30),
+        'scale_pos_weight': np.linspace(0.01, 1, 1000)
+        },
     }
 
 
@@ -126,6 +148,65 @@ class SelectFromPriorKnowledge(BaseEstimator, SelectorMixin):
 
     def _get_support_mask(self):
         return np.in1d(self.all_features, self.selected_features, assume_unique=True)
+
+
+class SelectKBestFromModel(BaseEstimator, TransformerMixin):
+    """Feature selection based on k-best features of a fitted model.
+    It corresponds to a recursive feature elimination with a single step.
+    """
+
+    def __init__(self, estimator, k=3):
+        """Initialize the object.
+        Parameters
+        ----------
+        estimator : object
+            A supervised learning estimator with a ``fit`` method that provides
+            information about feature importance either through a ``coef_``
+            attribute or through a ``feature_importances_`` attribute.
+        k : int, default=3
+            The number of features to select.
+        """
+        self.estimator = estimator
+        self.k = k
+        self.mask = None
+
+    def fit(self, X, y=None):
+        """Fit the underlying estimator.
+        Parameters
+        ----------
+        X : {array-like, sparse matrix}, shape = [n_samples, n_features]
+            The training input samples.
+        y : array-like, shape = [n_samples]
+            The target values.
+        """
+        self.estimator.fit(X, y)
+        return self
+
+    def get_support(self):
+        """Get a mask of the features selected."""
+        try:
+            scores = self.estimator.coef_[0, :]
+        except (AttributeError, KeyError):
+            scores = self.estimator.feature_importances_
+        mask = np.zeros(len(scores))
+        if self.k > len(scores):
+            self.k = len(scores)
+        mask[np.argpartition(abs(scores), -self.k)[-self.k:]] = 1
+        self.mask = mask.astype(bool)
+
+    def transform(self, X):
+        """Reduce X to the selected features.
+        Parameters
+        ----------
+        X : array of shape [n_samples, n_features]
+            The input samples.
+        Returns
+        -------
+        X_r : array of shape [n_samples, n_selected_features]
+            The input samples with only the selected features.
+        """
+        self.get_support()
+        return X[:, self.mask]
 
 
 class CorrelationThreshold(BaseEstimator, SelectorMixin):
@@ -205,15 +286,17 @@ def get_pipeline(template):
         'samp_ros': RandomOverSampler(random_state=313),
         'samp_smote': SMOTE(random_state=313),
         'decorr': CorrelationThreshold(),
-        'sfm_lr': SelectFromModel(LogisticRegression(solver='saga', random_state=313), threshold=-np.inf),
-        'sfm_et': SelectFromModel(ExtraTreesClassifier(random_state=313)),
-        'sfm_gb': SelectFromModel(GradientBoostingClassifier(random_state=313)),
-        'sfm_xgb': SelectFromModel(XGBClassifier(random_state=313)),
+        'sfm_lr': SelectKBestFromModel(LogisticRegression(solver='saga', random_state=313)),
+        'sfm_et': SelectKBestFromModel(ExtraTreesClassifier(random_state=313)),
+        'sfm_gb': SelectKBestFromModel(GradientBoostingClassifier(random_state=313)),
+        'sfm_xgb': SelectKBestFromModel(XGBClassifier(random_state=313)),
+        'sfm_cgb': SelectKBestFromModel(CatBoostClassifier(random_state=313, eval_metric='AUC', verbose=0)),
         'clf_lr': LogisticRegression(solver='saga', random_state=313),
         'clf_dt': DecisionTreeClassifier(random_state=313),
         'clf_et': ExtraTreesClassifier(random_state=313),
         'clf_gb': GradientBoostingClassifier(random_state=313),
-        'clf_xgb': XGBClassifier(random_state=313)
+        'clf_xgb': XGBClassifier(random_state=313),
+        'clf_cgb': CatBoostClassifier(random_state=313, eval_metric='AUC', verbose=0),
         }
     steps = list()
     for step in template:

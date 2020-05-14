@@ -147,7 +147,6 @@ def bootstrap_bca(pos, neg, alpha=0.05, boot_iters=2000):
         return np.nan, np.nan
     else:
         # Interval
-        alphas = np.array([alpha/2, 1-alpha/2])
         z1 = norm.ppf(alpha/2)
         z2 = norm.ppf(1-alpha/2)
         alpha1 = norm.pdf(z0 + (z0 + z1)/(1-a*(z0+z1)))
