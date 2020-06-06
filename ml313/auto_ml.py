@@ -41,7 +41,7 @@ hyperparameter_space = {
         'order': ['f-score', 'h-score'],
         },
     'sfm_lr': {
-        'estimator__penalty': ['l1', 'l2', 'elasticnet'],
+        'estimator__penalty': ['elasticnet'],
         'estimator__C': np.logspace(-4, 10, 1000, base=2),
         'estimator__l1_ratio': uniform(),
         'estimator__class_weight': [None, 'balanced'],
@@ -84,7 +84,7 @@ hyperparameter_space = {
         },
     'clf_lr': {
         'C': np.logspace(-5, 10, 1000, base=2),
-        'penalty': ['l1', 'l2', 'elasticnet'],
+        'penalty': ['elasticnet'],
         'l1_ratio': uniform(),
         'class_weight': [None, 'balanced'],
         },
