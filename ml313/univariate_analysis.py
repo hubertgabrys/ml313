@@ -1,11 +1,11 @@
-from joblib import Parallel, delayed
 import numpy as np
 import pandas as pd
-from scipy.stats import mannwhitneyu
-from statsmodels.stats.multitest import multipletests
-from scipy.stats import norm
-from scipy.stats import kruskal
+from joblib import Parallel, delayed
 from scipy.stats import f_oneway
+from scipy.stats import kruskal
+from scipy.stats import mannwhitneyu
+from scipy.stats import norm
+from statsmodels.stats.multitest import multipletests
 
 
 def univariate_analysis(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, n_jobs=1, verbose=0):
@@ -40,7 +40,8 @@ def univariate_analysis(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, 
         nx = len(x)
         ny = len(y)
         dof = nx + ny - 2
-        return (np.mean(x) - np.mean(y)) / np.sqrt(((nx-1)*np.std(x, ddof=1) ** 2 + (ny-1)*np.std(y, ddof=1) ** 2) / dof)
+        return (np.mean(x) - np.mean(y)) / np.sqrt(
+            ((nx - 1) * np.std(x, ddof=1) ** 2 + (ny - 1) * np.std(y, ddof=1) ** 2) / dof)
 
     def parfor(X_np, y_np, i):
         df_this = pd.DataFrame()
@@ -59,8 +60,8 @@ def univariate_analysis(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, 
             f_stat, f_pval = f_oneway(pos, neg)
             h_stat, h_pval = kruskal(pos, neg)
             mw_u2, mw_p = mannwhitneyu(pos, neg, alternative='two-sided')
-            mw_ubig = max(mw_u2, n_pos*n_neg-mw_u2)
-            auc = mw_u2/(n_pos*n_neg)
+            mw_ubig = max(mw_u2, n_pos * n_neg - mw_u2)
+            auc = mw_u2 / (n_pos * n_neg)
             # calculate the direction
             if mw_u2 < mw_ubig:
                 direction = 'negative'
@@ -132,27 +133,27 @@ def bootstrap_bca(pos, neg, alpha=0.05, boot_iters=2000):
         this_pos = np.random.choice(pos, n_pos)
         this_neg = np.random.choice(neg, n_neg)
         mw_u2, mw_p = mannwhitneyu(this_pos, this_neg, alternative='two-sided')
-        auc_b = mw_u2/(n_pos*n_neg)
+        auc_b = mw_u2 / (n_pos * n_neg)
         auc_b_list.append(auc_b)
     auc_bs = np.array(auc_b_list)
     # Initial computations
     auc_bs.sort(axis=0)
     mw_u2, mw_p = mannwhitneyu(pos, neg, alternative='two-sided')
-    auc_u = mw_u2/(n_pos*n_neg)
+    auc_u = mw_u2 / (n_pos * n_neg)
     # The bias correction value.
-    z0 = norm.ppf(np.sum(auc_bs < auc_u)/boot_iters)
+    z0 = norm.ppf(np.sum(auc_bs < auc_u) / boot_iters)
     # The acceleration value
     jstat = np.zeros(boot_iters)
     for i in range(boot_iters):
         jstat[i] = np.mean(np.delete(auc_bs, i))
     jmean = np.mean(jstat)
-    a = np.sum((jmean - jstat)**3) / (6.0 * np.sum((jmean - jstat)**2)**1.5)
+    a = np.sum((jmean - jstat) ** 3) / (6.0 * np.sum((jmean - jstat) ** 2) ** 1.5)
     if np.any(np.isnan(a)):
         return np.nan, np.nan
     else:
         # Interval
-        z1 = norm.ppf(alpha/2)
-        z2 = norm.ppf(1-alpha/2)
-        alpha1 = norm.pdf(z0 + (z0 + z1)/(1-a*(z0+z1)))
-        alpha2 = 1 - norm.pdf(z0 + (z0 + z2)/(1-a*(z0+z2)))
-        return np.percentile(auc_bs, alpha1*100), np.percentile(auc_bs, alpha2*100)
+        z1 = norm.ppf(alpha / 2)
+        z2 = norm.ppf(1 - alpha / 2)
+        alpha1 = norm.pdf(z0 + (z0 + z1) / (1 - a * (z0 + z1)))
+        alpha2 = 1 - norm.pdf(z0 + (z0 + z2) / (1 - a * (z0 + z2)))
+        return np.percentile(auc_bs, alpha1 * 100), np.percentile(auc_bs, alpha2 * 100)

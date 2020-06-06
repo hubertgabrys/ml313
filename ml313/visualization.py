@@ -1,13 +1,14 @@
 import matplotlib.pyplot as plt
+from sklearn import metrics
+from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn import metrics
 
 
 def plot_roc_curve(df, column, y):
     pipe = Pipeline(steps=[('scaler', RobustScaler()), ('clf', LogisticRegression())])
-    y_score = pipe.fit(df.loc[:, column].values.reshape(-1, 1), y).decision_function(df.loc[:, column].values.reshape(-1, 1))
+    y_score = pipe.fit(df.loc[:, column].values.reshape(-1, 1), y).decision_function(
+        df.loc[:, column].values.reshape(-1, 1))
     fpr, tpr, _ = metrics.roc_curve(y, y_score)
     roc_auc = metrics.auc(fpr, tpr)
     plt.figure()
@@ -26,7 +27,7 @@ def plot_roc_curve(df, column, y):
 
 def plot_auc_vs_wavelet(df_auc, feat2flip, rownames, colnames):
     arr_foo = df_auc.loc[feat2flip, 'AUC'].values.reshape(9, 154).T
-    fig, ax = plt.subplots(figsize=(30,30))
+    fig, ax = plt.subplots(figsize=(30, 30))
     plt.imshow(arr_foo)
     plt.yticks(range(154), rownames)
     plt.xticks(range(9), colnames, rotation='vertical')
