@@ -15,8 +15,6 @@ from sklearn.preprocessing import StandardScaler, PowerTransformer
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.ensemble import GradientBoostingClassifier
-from xgboost import XGBClassifier
-from catboost import CatBoostClassifier
 
 
 hyperparameter_space = {
@@ -243,14 +241,10 @@ def get_pipeline(template):
         'sfm_lr': SelectKBestFromModel(LogisticRegression(solver='saga', random_state=313)),
         'sfm_et': SelectKBestFromModel(ExtraTreesClassifier(random_state=313)),
         'sfm_gb': SelectKBestFromModel(GradientBoostingClassifier(random_state=313)),
-        'sfm_xgb': SelectKBestFromModel(XGBClassifier(random_state=313)),
-        'sfm_cgb': SelectKBestFromModel(CatBoostClassifier(random_state=313, eval_metric='AUC', verbose=0)),
         'clf_lr': LogisticRegression(solver='saga', random_state=313),
         'clf_dt': DecisionTreeClassifier(random_state=313),
         'clf_et': ExtraTreesClassifier(random_state=313),
         'clf_gb': GradientBoostingClassifier(random_state=313),
-        'clf_xgb': XGBClassifier(random_state=313),
-        'clf_cgb': CatBoostClassifier(random_state=313, eval_metric='AUC', verbose=0),
         }
     steps = list()
     for step in template:
