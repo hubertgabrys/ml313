@@ -123,7 +123,7 @@ hyperparameter_space = {
     }
 
 
-class SelectKBestFromModel(BaseEstimator, TransformerMixin):
+class SelectKBestFromModel(BaseEstimator, SelectorMixin):
     """Feature selection based on k-best features of a fitted model.
     It corresponds to a recursive feature elimination with a single step.
     """
@@ -141,7 +141,7 @@ class SelectKBestFromModel(BaseEstimator, TransformerMixin):
         """
         self.estimator = estimator
         self.k = k
-        self.mask = None
+        self.mask_ = None
 
     def fit(self, X, y=None):
         """Fit the underlying estimator.
@@ -155,7 +155,7 @@ class SelectKBestFromModel(BaseEstimator, TransformerMixin):
         self.estimator.fit(X, y)
         return self
 
-    def get_support(self):
+    def _get_support_mask(self):
         """Get a mask of the features selected."""
         try:
             scores = self.estimator.coef_[0, :]
@@ -165,21 +165,8 @@ class SelectKBestFromModel(BaseEstimator, TransformerMixin):
         if self.k > len(scores):
             self.k = len(scores)
         mask[np.argpartition(abs(scores), -self.k)[-self.k:]] = 1
-        self.mask = mask.astype(bool)
-
-    def transform(self, X):
-        """Reduce X to the selected features.
-        Parameters
-        ----------
-        X : array of shape [n_samples, n_features]
-            The input samples.
-        Returns
-        -------
-        X_r : array of shape [n_samples, n_selected_features]
-            The input samples with only the selected features.
-        """
-        self.get_support()
-        return X[:, self.mask]
+        self.mask_ = mask.astype(bool)
+        return self.mask_
 
 
 class CorrelationThreshold(BaseEstimator, SelectorMixin):
@@ -281,7 +268,7 @@ def get_param_dist(pipeline, max_features=None, sel_features=None):
         step_params = hyperparameter_space[step[0]]
         step_params = {step[0] + f'__{k}': v for k, v in step_params.items()}
         if step[0][:3] == 'sfm':
-            step_params[step[0] + '__max_features'] = np.arange(1, max_features + 1)
+            step_params[step[0] + '__k'] = np.arange(1, max_features + 1)
         if step[0] == 'sfpk':
             step_params[step[0] + '__selected_features'] = [sel_features]
         param_dist = {**param_dist, **step_params}
