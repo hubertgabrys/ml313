@@ -7,10 +7,9 @@ from imblearn.over_sampling import SMOTE
 from sklearn.pipeline import Pipeline
 from imblearn.pipeline import Pipeline as imbPipeline
 from sklearn.feature_selection._base import SelectorMixin
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_selection import f_classif
-from sklearn.feature_selection import SelectFromModel
 from sklearn.preprocessing import StandardScaler, PowerTransformer
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import ExtraTreesClassifier
@@ -22,7 +21,7 @@ hyperparameter_space = {
     'power_transformer': {},
     'samp_ros': {},
     'samp_smote': {
-        'k_neighbors': range(1,11),
+        'k_neighbors': range(1, 11),
         },
     'decorr': {
         'threshold': uniform(),
