@@ -20,16 +20,6 @@ from catboost import CatBoostClassifier
 
 
 hyperparameter_space = {
-    'sfpk': {},
-    'sfpk_meanct': {},
-    'sfpk_msskct': {},
-    'sfpk_meanpet': {},
-    'sfpk_msskpet': {},
-    'sfpk_volume': {},
-    'sfpk_shape': {},
-    'sfpk_intensity': {},
-    'sfpk_texture': {},
-    'sfpk_wavelets': {},
     'standard_scaler': {},
     'power_transformer': {},
     'samp_ros': {},
@@ -131,23 +121,6 @@ hyperparameter_space = {
         'scale_pos_weight': np.linspace(0.01, 1, 1000)
         },
     }
-
-
-class SelectFromPriorKnowledge(BaseEstimator, SelectorMixin):
-    """Feature selection based on prior knowledge.
-    If used, it needs to be the first step in the pipeline.
-    """
-
-    def __init__(self, selected_features=None):
-        self.selected_features = selected_features
-        self.all_features = None
-
-    def fit(self, X, y=None):
-        self.all_features = X.columns.values
-        return self
-
-    def _get_support_mask(self):
-        return np.in1d(self.all_features, self.selected_features, assume_unique=True)
 
 
 class SelectKBestFromModel(BaseEstimator, TransformerMixin):
@@ -275,12 +248,6 @@ class CorrelationThreshold(BaseEstimator, SelectorMixin):
 
 def get_pipeline(template):
     lookup_dict = {
-        'sfpk': SelectFromPriorKnowledge(),
-        'sfpk_volume': SelectFromPriorKnowledge(selected_features=['CT0_mc-volume']),
-        'sfpk_meanct': SelectFromPriorKnowledge(selected_features=['CT0_mean']),
-        'sfpk_msskct': SelectFromPriorKnowledge(selected_features=['CT0_mean', 'CT0_sd', 'CT0_skewness', 'CT0_kurtosis']),
-        'sfpk_meanpet': SelectFromPriorKnowledge(selected_features=['PET0_mean']),
-        'sfpk_msskpet': SelectFromPriorKnowledge(selected_features=['PET0_mean', 'PET0_sd', 'PET0_skewness', 'PET0_kurtosis']),
         'standard_scaler': StandardScaler(),
         'power_transformer': PowerTransformer(),
         'samp_ros': RandomOverSampler(random_state=313),
