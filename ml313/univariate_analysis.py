@@ -67,7 +67,11 @@ def univariate_analysis(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, 
             else:
                 direction = 'positive'
             # calculate confidence intervals
-            auc_l, auc_h = bootstrap_bca(pos, neg, alpha=boot_alpha, boot_iters=boot_iters)
+            if boot_iters is not None:
+                auc_l, auc_h = bootstrap_bca(pos, neg, alpha=boot_alpha, boot_iters=boot_iters)
+            else:
+                auc_l = np.nan
+                auc_h = np.nan
             if direction == 'negative':
                 auc = 1 - auc
                 auc_l_old = auc_l
