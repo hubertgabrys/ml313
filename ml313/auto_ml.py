@@ -28,7 +28,7 @@ hyperparameter_space = {
     },
     'decorr': {
         'threshold': uniform(),
-        'order': ['f-score', 'h-score'],
+        'score_func': ['f-score', 'h-score'],
     },
     'sel_normal': {
         'skew_threshold': np.logspace(0, 2, 20, base=100),
@@ -256,10 +256,9 @@ class CorrelationThreshold(BaseEstimator, SelectorMixin):
         Correlation matrix.
     """
 
-    def __init__(self, threshold=0.9, order='natural'):
+    def __init__(self, threshold=0.9, score_func='f-score'):
         self.threshold = threshold
-        self.order = order
-        self.correlation_matrix_ = None
+        self.score_func = score_func
 
     def fit(self, X, y=None):
         """Learn empirical variances from X.
@@ -278,15 +277,14 @@ class CorrelationThreshold(BaseEstimator, SelectorMixin):
         if isinstance(X, pd.DataFrame):
             self.correlation_matrix_ = X.corr('pearson')
         else:
-            self.correlation_matrix_ = pd.DataFrame(X).corr('pearson')
+            X = pd.DataFrame(X)
+            self.correlation_matrix_ = X.corr('pearson')
         # calculate the order of feature removal
-        if self.order == 'natural':
-            self.order = X.columns
-        elif self.order == 'f-score':
+        if self.score_func == 'f-score':
             F, pval = f_classif(X, y)
             index_arr = np.argsort(F)[::-1]
             self.order = X.columns[index_arr]
-        elif self.order == 'h-score':
+        elif self.score_func == 'h-score':
             h_stat = list()
             for col in X.columns:
                 statistic, pvalue = kruskal(X.loc[y, col], X.loc[~y, col])
