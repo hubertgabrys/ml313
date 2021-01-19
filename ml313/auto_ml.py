@@ -18,6 +18,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, PowerTransformer
 from sklearn.tree import DecisionTreeClassifier
+from xgboost import XGBClassifier
 
 hyperparameter_space = {
     'standard_scaler': {},
@@ -315,10 +316,12 @@ def get_pipeline(template):
         'sfm_lr': SelectKBestFromModel(LogisticRegression(solver='saga', random_state=313)),
         'sfm_et': SelectKBestFromModel(ExtraTreesClassifier(random_state=313)),
         'sfm_gb': SelectKBestFromModel(GradientBoostingClassifier(random_state=313)),
+        'sfm_xgb': SelectKBestFromModel(XGBClassifier(random_state=313)),
         'clf_lr': LogisticRegression(solver='saga', random_state=313),
         'clf_dt': DecisionTreeClassifier(random_state=313),
         'clf_et': ExtraTreesClassifier(random_state=313),
         'clf_gb': GradientBoostingClassifier(random_state=313),
+        'clf_xgb': XGBClassifier(random_state=313),
     }
     steps = list()
     for step in template:
