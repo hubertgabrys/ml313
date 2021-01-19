@@ -1,9 +1,9 @@
+imbalanced-learn
+joblib
+matplotlib
 numpy
 pandas
-scipy
 scikit-learn
-matplotlib
-joblib
+scipy
 statsmodels
-setuptools
-imbalanced-learn
+xgboost
