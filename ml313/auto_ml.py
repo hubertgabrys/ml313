@@ -20,32 +20,39 @@ from sklearn.preprocessing import StandardScaler, PowerTransformer
 from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 
+
 hyperparameter_space = {
-    'standard_scaler': {},
-    'power_transformer': {},
-    'samp_ros': {},
-    'samp_smote': {
+
+    # Transformers
+    'transformer:standard_scaler': {},
+    'transformer:power_transformer': {},
+
+    # Samplers
+    'sampler:ros': {},
+    'sampler:smote': {
         'k_neighbors': range(1, 11),
     },
-    'decorr': {
+
+    # Selectors
+    'selector:remove_correlated': {
         'threshold': uniform(),
         'score_func': ['f-score', 'h-score'],
     },
-    'sel_normal': {
+    'selector:remove_nonnormal': {
         'skew_threshold': np.logspace(0, 2, 20, base=100),
         'kurt_threshold': np.logspace(0, 2, 20, base=100)
     },
-    'sfpca': {
+    'selector:from_correlated2pca': {
         'n_components': 1.5 - np.logspace(-1, 0, 100, base=2),
     },
-    'sfm_lr': {
+    'selector:sfm_lr': {
         'estimator__penalty': ['elasticnet'],
         'estimator__C': np.logspace(-4, 10, 1000, base=2),
         'estimator__l1_ratio': uniform(),
         'estimator__class_weight': [None, 'balanced'],
     },
-    'sfm_et': {
-        'estimator__n_estimators': [100, 200, 300, 500],
+    'selector:sfm_et': {
+        'estimator__n_estimators': [100, 200, 300],
         'estimator__criterion': ["gini", "entropy"],
         'estimator__max_features': np.arange(0.05, 1.01, 0.05),
         'estimator__min_samples_split': range(2, 21),
@@ -53,7 +60,7 @@ hyperparameter_space = {
         'estimator__bootstrap': [True, False],
         'estimator__class_weight': [None, 'balanced'],
     },
-    'sfm_gb': {
+    'selector:sfm_gb': {
         'estimator__n_estimators': [100, 200, 300, 500],
         'estimator__learning_rate': [1e-3, 1e-2, 1e-1, 0.5, 1.],
         'estimator__max_depth': range(1, 11),
@@ -62,7 +69,7 @@ hyperparameter_space = {
         'estimator__subsample': np.arange(0.05, 1.01, 0.05),
         'estimator__max_features': np.arange(0.05, 1.01, 0.05)
     },
-    'sfm_xgb': {
+    'selector:sfm_xgb': {
         'estimator__n_estimators': [100, 200, 300, 500],
         'estimator__max_depth': range(1, 11),
         'estimator__learning_rate': [1e-3, 1e-2, 1e-1, 0.5, 1.],
@@ -70,7 +77,7 @@ hyperparameter_space = {
         'estimator__min_child_weight': range(1, 21),
         'estimator__n_jobs': [1]
     },
-    'sfm_cgb': {
+    'selector:sfm_cgb': {
         'estimator__iterations': range(300, 3000),
         'estimator__depth': range(4, 12),
         'estimator__learning_rate': np.logspace(-2, -1, 1000, base=10),
@@ -80,19 +87,21 @@ hyperparameter_space = {
         'estimator__l2_leaf_reg': range(2, 30),
         'estimator__scale_pos_weight': np.linspace(0.01, 1, 1000)
     },
-    'clf_lr': {
-        'C': np.logspace(-5, 10, 1000, base=2),
+
+    # Classifiers
+    'classifier:lr': {
+        'C': np.logspace(-5, 10, 100, base=2),
         'penalty': ['elasticnet'],
         'l1_ratio': uniform(),
         'class_weight': [None, 'balanced'],
     },
-    'clf_dt': {
+    'classifier:dt': {
         'criterion': ["gini", "entropy"],
         'max_depth': range(1, 11),
         'min_samples_split': range(2, 21),
         'min_samples_leaf': range(1, 21)
     },
-    'clf_et': {
+    'classifier:et': {
         'n_estimators': [100, 200, 300, 500],
         'criterion': ["gini", "entropy"],
         'max_features': np.arange(0.05, 1.01, 0.05),
@@ -101,7 +110,7 @@ hyperparameter_space = {
         'bootstrap': [True, False],
         'class_weight': [None, 'balanced'],
     },
-    'clf_gb': {
+    'classifier:gb': {
         'n_estimators': [100, 200, 300, 500],
         'learning_rate': [1e-3, 1e-2, 1e-1, 0.5, 1.],
         'max_depth': range(1, 11),
@@ -110,7 +119,7 @@ hyperparameter_space = {
         'subsample': np.arange(0.05, 1.01, 0.05),
         'max_features': np.arange(0.05, 1.01, 0.05)
     },
-    'clf_xgb': {
+    'classifier:xgb': {
         'n_estimators': [100, 200, 300, 500],
         'max_depth': range(1, 11),
         'learning_rate': [1e-3, 1e-2, 1e-1, 0.5, 1.],
@@ -118,7 +127,7 @@ hyperparameter_space = {
         'min_child_weight': range(1, 21),
         'n_jobs': [1]
     },
-    'clf_cgb': {
+    'classifier:cgb': {
         'iterations': range(500, 2000),
         'depth': range(4, 12),
         'learning_rate': np.logspace(-2, -1, 1000, base=10),
@@ -306,22 +315,22 @@ class CorrelationThreshold(BaseEstimator, SelectorMixin):
 
 def get_pipeline(template):
     lookup_dict = {
-        'standard_scaler': StandardScaler(),
-        'power_transformer': PowerTransformer(),
-        'samp_ros': RandomOverSampler(random_state=313),
-        'samp_smote': SMOTE(random_state=313),
-        'decorr': CorrelationThreshold(),
-        'sel_normal': SelectNormal(),
-        'sfpca': SelectFromPCA(),
-        'sfm_lr': SelectKBestFromModel(LogisticRegression(solver='saga', random_state=313)),
-        'sfm_et': SelectKBestFromModel(ExtraTreesClassifier(random_state=313)),
-        'sfm_gb': SelectKBestFromModel(GradientBoostingClassifier(random_state=313)),
-        'sfm_xgb': SelectKBestFromModel(XGBClassifier(random_state=313)),
-        'clf_lr': LogisticRegression(solver='saga', random_state=313),
-        'clf_dt': DecisionTreeClassifier(random_state=313),
-        'clf_et': ExtraTreesClassifier(random_state=313),
-        'clf_gb': GradientBoostingClassifier(random_state=313),
-        'clf_xgb': XGBClassifier(random_state=313),
+        'transformer:standard_scaler': StandardScaler(),
+        'transformer:power_transformer': PowerTransformer(),
+        'sampler:ros': RandomOverSampler(random_state=313),
+        'sampler:smote': SMOTE(random_state=313),
+        'selector:remove_correlated': CorrelationThreshold(),
+        'selector:remove_nonnormal': SelectNormal(),
+        'selector:from_correlated2pca': SelectFromPCA(),
+        'selector:sfm_lr': SelectKBestFromModel(LogisticRegression(solver='saga', random_state=313)),
+        'selector:sfm_et': SelectKBestFromModel(ExtraTreesClassifier(random_state=313)),
+        'selector:sfm_gb': SelectKBestFromModel(GradientBoostingClassifier(random_state=313)),
+        'selector:sfm_xgb': SelectKBestFromModel(XGBClassifier(eval_metric='logloss', use_label_encoder=False, random_state=313)),
+        'classifier:lr': LogisticRegression(solver='saga', random_state=313),
+        'classifier:dt': DecisionTreeClassifier(random_state=313),
+        'classifier:et': ExtraTreesClassifier(random_state=313),
+        'classifier:gb': GradientBoostingClassifier(random_state=313),
+        'classifier:xgb': XGBClassifier(eval_metric='logloss', use_label_encoder=False, random_state=313),
     }
     steps = list()
     for step in template:
@@ -333,24 +342,28 @@ def get_pipeline(template):
     return pipeline
 
 
-def get_param_dist(pipeline, max_features=None, sel_features=None):
+def get_param_dist(pipeline, max_features=None):
     param_dist = {}
     for step in pipeline.steps:
         step_params = hyperparameter_space[step[0]]
         step_params = {step[0] + f'__{k}': v for k, v in step_params.items()}
         if step[0][:3] == 'sfm':
             step_params[step[0] + '__k'] = np.arange(1, max_features + 1)
-        if step[0] == 'sfpk':
-            step_params[step[0] + '__selected_features'] = [sel_features]
         param_dist = {**param_dist, **step_params}
     return param_dist
 
 
 def get_support(model):
-    no_feats = model.best_estimator_.steps[0][1].get_support().shape[0]
+    no_feats = None
+    i = 0
+    while not no_feats:
+        try:
+            no_feats = model.best_estimator_.steps[i][1].get_support().shape[0]
+        except AttributeError:
+            i += 1
     indices = np.arange(no_feats)
     for step in model.best_estimator_.steps:
-        if isinstance(step[1], SelectorMixin):
+        if isinstance(step[1], SelectorMixin) or isinstance(step[1], SelectKBestFromModel):
             indices = indices[step[1].get_support()]
     support = np.zeros(no_feats, dtype=bool)
     support[indices] = True
@@ -359,7 +372,7 @@ def get_support(model):
 
 def get_weights(model):
     try:
-        weights = model.best_estimator_.steps[-1][1].coef_
+        weights = model.best_estimator_.steps[-1][1].coef_[0]
     except AttributeError:
         weights = model.best_estimator_.steps[-1][1].feature_importances_
     return weights
