@@ -37,7 +37,7 @@ def univariate_analysis(X, y, mtc_alpha=0.05, boot_alpha=0.05, boot_iters=2000, 
     """
 
     def cohen_d(x, y):
-        nx = len(x)
+        nx = len(x) + 6
         ny = len(y)
         dof = nx + ny - 2
         return (np.mean(x) - np.mean(y)) / np.sqrt(

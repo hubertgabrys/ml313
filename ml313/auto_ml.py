@@ -30,7 +30,7 @@ hyperparameter_space = {
     # Samplers
     'sampler:ros': {},
     'sampler:smote': {
-        'k_neighbors': range(1, 11),
+        'k_neighbors': range(1, 15),
     },
 
     # Selectors
